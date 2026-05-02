@@ -12,6 +12,16 @@ const getNormalizedPath = (...segments) => {
   return path.posix.join(...segments);
 };
 
+const sanitizeFileName = (name) => {
+  const safe = String(name || 'project')
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  return safe || 'project';
+};
+
 const toUploadDiskPath = (storedPath) => {
   if (!storedPath) return null;
 
@@ -287,7 +297,7 @@ const exportProject = async (req, res) => {
     }
 
     // Генеруємо ім'я вихідного файлу
-    const outputFileName = `${project.name.replace(/\s+/g, '_')}_${Date.now()}.mp3`;
+    const outputFileName = `${sanitizeFileName(project.name)}_${Date.now()}.mp3`;
     const outputDir = path.join(__dirname, '../uploads', req.user.userId, projectId);
     const outputPath = path.join(outputDir, outputFileName);
 
@@ -304,9 +314,15 @@ const exportProject = async (req, res) => {
     });
 
     // Фільтр для змішування аудіо з врахуванням гучностей
-    const filterComplex = files
-      .map((file, index) => `[${index}]volume=${file.volume}[a${index}]`)
-      .join(';') + '[' + files.map((_, index) => `a${index}`).join('][') + ']amix=inputs=' + files.length + ':duration=longest[aout]';
+    const volumeFilters = files.map((file, index) => {
+      const volume = Number.isFinite(file.volume) ? file.volume : 1;
+      return `[${index}:a]volume=${volume}[a${index}]`;
+    });
+    const mixedInputs = files.map((_, index) => `[a${index}]`).join('');
+    const filterComplex = [
+      ...volumeFilters,
+      `${mixedInputs}amix=inputs=${files.length}:duration=longest:normalize=0[aout]`,
+    ];
 
     ffmpegCommand
       .complexFilter(filterComplex)
