@@ -31,3 +31,7 @@ build/
 
 # Вихідні артефакти
 out/
+
+# Тимчасові артефакти dev-оточення
+backend/.mongo-binaries/
+frontend/vite.config.js.timestamp-*.mjs
