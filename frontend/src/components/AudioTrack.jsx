@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import './AudioTrack.css';
 import { getAudioUrl } from '../utils/audioUtils';
 
@@ -14,6 +14,7 @@ export default function AudioTrack({
   onFileUpload,
   onStartRecording,
   onAudioReady,
+  onStopRecording,
 }) {
   const [isRecording, setIsRecording] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -30,7 +31,7 @@ export default function AudioTrack({
   const analyserRef = useRef(null);
   const animationIdRef = useRef(null);
 
-  const getOrCreateAudioElement = () => {
+  const getOrCreateAudioElement = useCallback(() => {
     if (!audioRef.current) {
       const audio = new Audio();
       audio.crossOrigin = 'anonymous';
@@ -42,13 +43,13 @@ export default function AudioTrack({
       });
       audioRef.current = audio;
 
-      if (trackIndex === null && onAudioReady) {
+      if (onAudioReady) {
         onAudioReady(audio);
       }
     }
 
     return audioRef.current;
-  };
+  }, [onAudioReady]);
 
   const startRecording = async () => {
     try {
@@ -97,6 +98,9 @@ export default function AudioTrack({
       setIsRecording(false);
       clearInterval(recordingTimerRef.current);
       stopRecordingWaveform();
+      if (onStopRecording) {
+        onStopRecording();
+      }
     }
   };
 
@@ -255,6 +259,17 @@ export default function AudioTrack({
       audioElement.volume = Math.max(0, Math.min(1, volume));
     }
   }, [volume]);
+
+  useEffect(() => {
+    if (!filePath) return;
+
+    const audioUrl = getAudioUrl(filePath);
+    if (!audioUrl) return;
+
+    const audioElement = getOrCreateAudioElement();
+    audioElement.src = audioUrl;
+    audioElement.volume = Math.max(0, Math.min(1, volume));
+  }, [filePath, volume, getOrCreateAudioElement]);
 
   const uploadRecording = async () => {
     try {

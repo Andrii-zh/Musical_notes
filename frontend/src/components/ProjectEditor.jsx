@@ -17,6 +17,7 @@ export default function ProjectEditor({ projectId, onUpdate }) {
   const [selectedTracksForExport, setSelectedTracksForExport] = useState([]);
   const lyricsTimeoutRef = useRef(null);
   const instrumentalAudioRef = useRef(null);
+  const vocalAudioRefs = useRef([]);
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -200,8 +201,65 @@ export default function ProjectEditor({ projectId, onUpdate }) {
   const handleStartVocalRecording = () => {
     // Запускаємо інструментальну доріжку при запуску вокального запису
     if (instrumentalAudioRef.current && project?.instrumentalPath) {
-      instrumentalAudioRef.current.play();
+      instrumentalAudioRef.current.currentTime = 0;
+      instrumentalAudioRef.current.play().catch(() => {
+        setError('Не вдалося запустити інструментал під час запису');
+      });
     }
+  };
+
+  const playAll = () => {
+    const playTargets = [];
+
+    if (project?.instrumentalPath && instrumentalAudioRef.current) {
+      playTargets.push(instrumentalAudioRef.current);
+    }
+
+    project.vocalTracks.forEach((track, index) => {
+      if (track.filePath && vocalAudioRefs.current[index]) {
+        playTargets.push(vocalAudioRefs.current[index]);
+      }
+    });
+
+    if (playTargets.length === 0) {
+      setError('Немає доріжок для відтворення');
+      return;
+    }
+
+    setError('');
+    playTargets.forEach((audio) => {
+      try {
+        audio.currentTime = 0;
+        audio.play().catch(() => {
+          setError('Не вдалося запустити всі доріжки одночасно');
+        });
+      } catch {
+        setError('Не вдалося запустити всі доріжки одночасно');
+      }
+    });
+  };
+
+  const stopAll = () => {
+    const stopTargets = [];
+
+    if (instrumentalAudioRef.current) {
+      stopTargets.push(instrumentalAudioRef.current);
+    }
+
+    project.vocalTracks.forEach((_, index) => {
+      if (vocalAudioRefs.current[index]) {
+        stopTargets.push(vocalAudioRefs.current[index]);
+      }
+    });
+
+    stopTargets.forEach((audio) => {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {
+        // ignore
+      }
+    });
   };
 
   if (loading) {
@@ -289,6 +347,19 @@ export default function ProjectEditor({ projectId, onUpdate }) {
                   filePath={track.filePath}
                   volume={track.volume}
                   onStartRecording={handleStartVocalRecording}
+                  onAudioReady={(audio) => {
+                    vocalAudioRefs.current[index] = audio;
+                  }}
+                  onStopRecording={() => {
+                    if (instrumentalAudioRef.current) {
+                      try {
+                        instrumentalAudioRef.current.pause();
+                        instrumentalAudioRef.current.currentTime = 0;
+                      } catch {
+                        // ignore
+                      }
+                    }
+                  }}
                   onVolumeChange={async (newVolume) => {
                     const newTracks = [...project.vocalTracks];
                     newTracks[index].volume = newVolume;
@@ -341,6 +412,18 @@ export default function ProjectEditor({ projectId, onUpdate }) {
       </div>
 
       <div className="editor-footer">
+        <button
+          className="action-btn"
+          onClick={playAll}
+        >
+          ▶ Відтворити все
+        </button>
+        <button
+          className="action-btn"
+          onClick={stopAll}
+        >
+          ⏹ Зупинити все
+        </button>
         <button
           className="action-btn save-btn"
           onClick={() => setShowSaveDialog(true)}

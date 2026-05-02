@@ -319,7 +319,7 @@ const exportProject = async (req, res) => {
         const downloadUrl = getNormalizedPath('audio', 'download', req.user.userId, projectId, outputFileName);
         res.status(200).json({
           message: 'Експорт успішно завершено',
-          filePath: `/api/${downloadUrl}`,
+          filePath: `/${downloadUrl}`,
         });
       })
       .on('error', (error) => {
