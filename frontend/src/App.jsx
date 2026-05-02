@@ -1,20 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import './App.css';
 import AuthPage from './pages/AuthPage';
 import MainLayout from './pages/MainLayout';
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Перевіряємо чи збережено токен
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
     const token = localStorage.getItem('token');
-    if (token) {
-      setIsAuthenticated(true);
-    }
-    setLoading(false);
-  }, []);
+    return Boolean(token);
+  });
+  const loading = false;
 
   const handleLogin = (token) => {
     localStorage.setItem('token', token);

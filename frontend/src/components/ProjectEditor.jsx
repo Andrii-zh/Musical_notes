@@ -16,37 +16,38 @@ export default function ProjectEditor({ projectId, onUpdate }) {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [selectedTracksForExport, setSelectedTracksForExport] = useState([]);
   const lyricsTimeoutRef = useRef(null);
+  const instrumentalAudioRef = useRef(null);
 
   useEffect(() => {
+    const fetchProject = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_URL}/projects/${projectId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) throw new Error('Не вдалося завантажити проект');
+
+        const data = await response.json();
+        setProject(data);
+        setLyrics(data.lyrics || '');
+        setProjectName(data.name);
+        setInstrumentalVolume(data.instrumentalVolume || 1);
+        setSelectedTracksForExport(
+          data.vocalTracks.map((_, idx) => idx)
+        );
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchProject();
   }, [projectId]);
-
-  const fetchProject = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/projects/${projectId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) throw new Error('Не вдалося завантажити проект');
-
-      const data = await response.json();
-      setProject(data);
-      setLyrics(data.lyrics || '');
-      setProjectName(data.name);
-      setInstrumentalVolume(data.instrumentalVolume || 1);
-      setSelectedTracksForExport(
-        data.vocalTracks.map((_, idx) => idx)
-      );
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const saveLyrics = async (newLyrics) => {
     if (!project) return;
@@ -196,6 +197,13 @@ export default function ProjectEditor({ projectId, onUpdate }) {
     }
   };
 
+  const handleStartVocalRecording = () => {
+    // Запускаємо інструментальну доріжку при запуску вокального запису
+    if (instrumentalAudioRef.current && project?.instrumentalPath) {
+      instrumentalAudioRef.current.play();
+    }
+  };
+
   if (loading) {
     return <div className="editor-loading">Завантаження...</div>;
   }
@@ -222,6 +230,9 @@ export default function ProjectEditor({ projectId, onUpdate }) {
             trackIndex={null}
             filePath={project.instrumentalPath}
             volume={instrumentalVolume}
+            onAudioReady={(audio) => {
+              instrumentalAudioRef.current = audio;
+            }}
             onVolumeChange={async (newVolume) => {
               setInstrumentalVolume(newVolume);
               try {
@@ -277,6 +288,7 @@ export default function ProjectEditor({ projectId, onUpdate }) {
                   trackIndex={index}
                   filePath={track.filePath}
                   volume={track.volume}
+                  onStartRecording={handleStartVocalRecording}
                   onVolumeChange={async (newVolume) => {
                     const newTracks = [...project.vocalTracks];
                     newTracks[index].volume = newVolume;

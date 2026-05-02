@@ -12,32 +12,32 @@ export default function MainLayout({ onLogout }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_URL}/projects`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) throw new Error('Не вдалося завантажити проекти');
+
+        const data = await response.json();
+        setProjects(data);
+        if (data.length > 0) {
+          setSelectedProjectId((currentProjectId) => currentProjectId || data[0]._id);
+        }
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchProjects();
   }, []);
-
-  const fetchProjects = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/projects`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) throw new Error('Не вдалося завантажити проекти');
-
-      const data = await response.json();
-      setProjects(data);
-      if (data.length > 0 && !selectedProjectId) {
-        setSelectedProjectId(data[0]._id);
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleCreateProject = async (name) => {
     try {
