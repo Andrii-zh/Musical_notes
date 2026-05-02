@@ -1,0 +1,33 @@
+# Node модулі
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# Переменні середовища
+.env
+.env.local
+.env.*.local
+
+# Аудіо файли та завантаження
+backend/uploads/
+*.mp3
+*.wav
+*.ogg
+
+# Вихідні файли
+dist/
+build/
+.dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Вихідні артефакти
+out/
