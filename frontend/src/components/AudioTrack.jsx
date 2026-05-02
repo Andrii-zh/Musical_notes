@@ -76,8 +76,34 @@ export default function AudioTrack({
         onStartRecording();
       }
 
+      // Нормалізація вокального стріму в стерео (дублювання в обидва канали)
+      let recordingStream = stream;
+      try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(stream);
+        
+        // Розділяємо канали для обробки
+        const splitter = audioContext.createChannelSplitter(2);
+        const merger = audioContext.createChannelMerger(2);
+        
+        source.connect(splitter);
+        splitter.connect(merger, 0, 0); // Лівий -> Лівий
+        splitter.connect(merger, 0, 1); // Лівий -> Правий (дублювання для стерео)
+        
+        // Вихідний стрім для запису
+        const destination = audioContext.createMediaStreamDestination();
+        merger.connect(destination);
+        recordingStream = destination.stream;
+        
+        // Зберігаємо контекст для очищення
+        audioContextRef.current = audioContext;
+      } catch (err) {
+        // Якщо обробка не спрацювала, записуємо оригінальний стрім
+        console.error('Помилка при нормалізації стріму:', err);
+      }
+
       audioChunksRef.current = [];
-      mediaRecorderRef.current = new MediaRecorder(stream, {
+      mediaRecorderRef.current = new MediaRecorder(recordingStream, {
         mimeType: 'audio/webm',
       });
 
