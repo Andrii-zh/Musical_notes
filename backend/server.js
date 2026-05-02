@@ -8,6 +8,7 @@ const { MongoMemoryServer } = require('mongodb-memory-server');
 const authRoutes = require('./routes/auth');
 const projectRoutes = require('./routes/projects');
 const audioRoutes = require('./routes/audio');
+const { streamAudioFile } = require('./controllers/audioController');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -27,8 +28,8 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Статичні файли для завантажених аудіо
-app.use('/api/files', express.static(path.join(__dirname, 'uploads')));
+// Аудіофайли через резолвер, який підтримує і final, і temp-шлях
+app.get(/^\/api\/files\/(.*)$/, streamAudioFile);
 
 // ============ ПІДКЛЮЧЕННЯ ДО MONGODB ============
 
@@ -39,7 +40,12 @@ const connectToDatabase = async () => {
     // Якщо використовуємо режим розробки без вказаного URI — запускаємо Memory Server
     if (!mongoUri && process.env.NODE_ENV !== 'production') {
       console.log('🚀 Запускаю MongoDB Memory Server...');
-      mongoServer = await MongoMemoryServer.create();
+      mongoServer = await MongoMemoryServer.create({
+        binary: {
+          version: process.env.MONGOMS_VERSION || '6.0.14',
+          downloadDir: process.env.MONGOMS_DOWNLOAD_DIR || path.join(__dirname, '.mongo-binaries'),
+        },
+      });
       mongoUri = mongoServer.getUri();
       console.log('✅ MongoDB Memory Server готовий');
     }
