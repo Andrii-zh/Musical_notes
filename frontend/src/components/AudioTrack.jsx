@@ -54,13 +54,27 @@ export default function AudioTrack({
   const startRecording = async () => {
     try {
       setError('');
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const constraints = {
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
+          echoCancellation: false,
+          noiseSuppression: false,
           autoGainControl: false,
+          latency: 0.01,
         },
-      });
+      };
+
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch {
+        // Fallback: якщо браузер не підтримує всі параметри, спробуємо без них
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+
+      // Запускаємо інструментал якщо це вокальна доріжка та існує інструментал
+      if (trackIndex !== null && onStartRecording) {
+        onStartRecording();
+      }
 
       audioChunksRef.current = [];
       mediaRecorderRef.current = new MediaRecorder(stream, {
@@ -79,11 +93,6 @@ export default function AudioTrack({
       mediaRecorderRef.current.start();
       setIsRecording(true);
       setRecordingTime(0);
-
-      // Запускаємо інструментал якщо це вокальна доріжка та існує інструментал
-      if (trackIndex !== null && onStartRecording) {
-        onStartRecording();
-      }
 
       recordingTimerRef.current = setInterval(() => {
         setRecordingTime((t) => t + 1);
