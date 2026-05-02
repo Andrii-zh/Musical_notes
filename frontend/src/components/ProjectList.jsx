@@ -62,7 +62,7 @@ export default function ProjectList({
         ) : (
           <ul className="projects-list">
             {projects.map((project) => (
-              <li key={project._id} className="project-list-item">
+              <li key={project._id}>
                 <button
                   className={`project-item ${
                     selectedProjectId === project._id ? 'active' : ''
@@ -70,22 +70,22 @@ export default function ProjectList({
                   onClick={() => onSelectProject(project._id)}
                 >
                   <span className="project-name">{project.name}</span>
-                </button>
-                <button
-                  className="delete-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (
-                      confirm(
-                        `Видалити проект "${project.name}"? Це не можна скасувати.`
-                      )
-                    ) {
-                      onDeleteProject(project._id);
-                    }
-                  }}
-                  title="Видалити"
-                >
-                  ✕
+                  <button
+                    className="delete-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (
+                        confirm(
+                          `Видалити проект "${project.name}"? Це не можна скасувати.`
+                        )
+                      ) {
+                        onDeleteProject(project._id);
+                      }
+                    }}
+                    title="Видалити"
+                  >
+                    ✕
+                  </button>
                 </button>
               </li>
             ))}
