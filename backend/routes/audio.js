@@ -12,6 +12,15 @@ const authenticateToken = require('../middleware/auth');
 
 const router = express.Router();
 
+const mimeToExtension = {
+  'audio/mpeg': '.mp3',
+  'audio/mp3': '.mp3',
+  'audio/wav': '.wav',
+  'audio/x-wav': '.wav',
+  'audio/ogg': '.ogg',
+  'audio/webm': '.webm',
+};
+
 // Налаштування multer для завантаження файлів
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -27,7 +36,10 @@ const storage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    const originalExt = path.extname(file.originalname || '');
+    const mappedExt = mimeToExtension[file.mimetype] || '';
+    const fileExt = originalExt || mappedExt;
+    cb(null, file.fieldname + '-' + uniqueSuffix + fileExt);
   },
 });
 

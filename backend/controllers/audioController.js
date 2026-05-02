@@ -7,6 +7,103 @@ const ffmpegStatic = require('ffmpeg-static');
 // Налаштовуємо шлях до ffmpeg
 ffmpeg.setFfmpegPath(ffmpegStatic);
 
+// Helper функція для створення нормалізованого шляху (завжди з forward slashes)
+const getNormalizedPath = (...segments) => {
+  return path.posix.join(...segments);
+};
+
+const toUploadDiskPath = (storedPath) => {
+  if (!storedPath) return null;
+
+  const normalized = storedPath.replace(/\\/g, '/');
+  const trimmed = normalized.startsWith('uploads/')
+    ? normalized.slice('uploads/'.length)
+    : normalized;
+
+  return path.join(__dirname, '../uploads', trimmed.replace(/\//g, path.sep));
+};
+
+const resolveAudioFilePath = (userId, projectId, kind, fileName) => {
+  const uploadsRoot = path.join(__dirname, '../uploads', userId, projectId);
+  const candidates = [
+    path.join(uploadsRoot, kind, fileName),
+    path.join(uploadsRoot, 'temp', fileName),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  const tempDir = path.join(uploadsRoot, 'temp');
+  if (fs.existsSync(tempDir)) {
+    const tempFiles = fs.readdirSync(tempDir);
+    const exactMatch = tempFiles.find((name) => name === fileName);
+    if (exactMatch) {
+      return path.join(tempDir, exactMatch);
+    }
+
+    const baseName = path.parse(fileName).name;
+    const prefixMatch = tempFiles.find((name) => name.startsWith(baseName));
+    if (prefixMatch) {
+      return path.join(tempDir, prefixMatch);
+    }
+  }
+
+  return null;
+};
+
+const getMimeTypeFromFile = (filePath) => {
+  try {
+    const extension = path.extname(filePath).toLowerCase();
+    if (extension === '.mp3') return 'audio/mpeg';
+    if (extension === '.wav') return 'audio/wav';
+    if (extension === '.ogg') return 'audio/ogg';
+    if (extension === '.webm') return 'audio/webm';
+
+    const fd = fs.openSync(filePath, 'r');
+    const header = Buffer.alloc(16);
+    const bytesRead = fs.readSync(fd, header, 0, 16, 0);
+    fs.closeSync(fd);
+    const signature = header.subarray(0, bytesRead);
+
+    if (signature.length >= 3 && signature[0] === 0x49 && signature[1] === 0x44 && signature[2] === 0x33) {
+      return 'audio/mpeg';
+    }
+
+    if (signature.length >= 2 && signature[0] === 0xff && (signature[1] & 0xe0) === 0xe0) {
+      return 'audio/mpeg';
+    }
+
+    if (
+      signature.length >= 12
+      && signature[0] === 0x52
+      && signature[1] === 0x49
+      && signature[2] === 0x46
+      && signature[3] === 0x46
+      && signature[8] === 0x57
+      && signature[9] === 0x41
+      && signature[10] === 0x56
+      && signature[11] === 0x45
+    ) {
+      return 'audio/wav';
+    }
+
+    if (signature.length >= 4 && signature[0] === 0x4f && signature[1] === 0x67 && signature[2] === 0x67 && signature[3] === 0x53) {
+      return 'audio/ogg';
+    }
+
+    if (signature.length >= 4 && signature[0] === 0x1a && signature[1] === 0x45 && signature[2] === 0xdf && signature[3] === 0xa3) {
+      return 'audio/webm';
+    }
+  } catch (error) {
+    return 'application/octet-stream';
+  }
+
+  return 'application/octet-stream';
+};
+
 // Завантажити інструментальну доріжку
 const uploadInstrumental = async (req, res) => {
   try {
@@ -27,19 +124,45 @@ const uploadInstrumental = async (req, res) => {
       return res.status(403).json({ error: 'Доступ заборонено' });
     }
 
-    // Сохраняємо шлях до файлу
-    const relativePath = path.join('uploads', req.user.userId, projectId, 'instrumental', req.file.filename);
-    project.instrumentalPath = relativePath;
+    try {
+      // Переміщуємо файл з temp до інструментальної папки
+      const instrumentalDir = path.join(__dirname, '../uploads', req.user.userId, projectId, 'instrumental');
+      
+      // Створюємо директорію якщо її нема
+      if (!fs.existsSync(instrumentalDir)) {
+        fs.mkdirSync(instrumentalDir, { recursive: true });
+      }
 
-    await project.save();
+      const oldPath = req.file.path;
+      const fileName = req.file.filename;
+      const newPath = path.join(instrumentalDir, fileName);
 
-    res.status(200).json({
-      message: 'Інструментальна доріжка успішно завантажена',
-      instrumentalPath: relativePath,
-    });
+      // Переміщуємо файл
+      fs.renameSync(oldPath, newPath);
+      
+      console.log(`✅ Інструментал завантажено: ${newPath}`);
+
+      // Зберігаємо шлях відносно backend/uploads, бо /api/files вже вказує на цю папку
+      const relativePath = getNormalizedPath(req.user.userId, projectId, 'instrumental', fileName);
+      project.instrumentalPath = relativePath;
+
+      await project.save();
+
+      res.status(200).json({
+        message: 'Інструментальна доріжка успішно завантажена',
+        instrumentalPath: relativePath,
+      });
+    } catch (fileErr) {
+      console.error('Помилка при переміщенні файлу:', fileErr);
+      // Видаляємо файл якщо переміщення не вдалось
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (e) {}
+      throw fileErr;
+    }
   } catch (error) {
     console.error('Помилка при завантаженні інструментальної доріжки:', error);
-    res.status(500).json({ error: 'Помилка при завантаженні' });
+    res.status(500).json({ error: error.message || 'Помилка при завантаженні' });
   }
 };
 
@@ -70,20 +193,41 @@ const uploadVocal = async (req, res) => {
       return res.status(400).json({ error: 'Невалідний індекс доріжки' });
     }
 
-    // Сохраняємо шлях до файлу
-    const relativePath = path.join('uploads', req.user.userId, projectId, 'vocal', `track_${trackIdx}_${req.file.filename}`);
-    project.vocalTracks[trackIdx].filePath = relativePath;
+    try {
+      // Переміщуємо файл з temp до вокальної папки
+      const vocalDir = path.join(__dirname, '../uploads', req.user.userId, projectId, 'vocal');
+      if (!fs.existsSync(vocalDir)) {
+        fs.mkdirSync(vocalDir, { recursive: true });
+      }
 
-    await project.save();
+      const oldPath = req.file.path;
+      const fileName = `track_${trackIdx}_${req.file.filename}`;
+      const newPath = path.join(vocalDir, fileName);
 
-    res.status(200).json({
-      message: 'Вокальна доріжка успішно завантажена',
-      filePath: relativePath,
-      trackIndex: trackIdx,
-    });
+      fs.renameSync(oldPath, newPath);
+
+      console.log(`✅ Вокальна доріжка ${trackIdx} завантажена: ${newPath}`);
+
+      // Зберігаємо шлях відносно backend/uploads, бо /api/files вже вказує на цю папку
+      const relativePath = getNormalizedPath(req.user.userId, projectId, 'vocal', fileName);
+      project.vocalTracks[trackIdx].filePath = relativePath;
+
+      await project.save();
+
+      res.status(200).json({
+        message: 'Вокальна доріжка успішно завантажена',
+        filePath: relativePath,
+      });
+    } catch (fileErr) {
+      console.error('Помилка при переміщенні файлу:', fileErr);
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (e) {}
+      throw fileErr;
+    }
   } catch (error) {
     console.error('Помилка при завантаженні вокальної доріжки:', error);
-    res.status(500).json({ error: 'Помилка при завантаженні' });
+    res.status(500).json({ error: error.message || 'Помилка при завантаженні' });
   }
 };
 
@@ -109,7 +253,7 @@ const exportProject = async (req, res) => {
 
     // Додаємо інструментальну доріжку якщо вона є
     if (project.instrumentalPath) {
-      const instrumentalPath = path.join(__dirname, '../', project.instrumentalPath);
+      const instrumentalPath = toUploadDiskPath(project.instrumentalPath);
       if (fs.existsSync(instrumentalPath)) {
         files.push({
           path: instrumentalPath,
@@ -125,7 +269,7 @@ const exportProject = async (req, res) => {
         if (trackIdx >= 0 && trackIdx < project.vocalTracks.length) {
           const track = project.vocalTracks[trackIdx];
           if (track.filePath) {
-            const trackPath = path.join(__dirname, '../', track.filePath);
+            const trackPath = toUploadDiskPath(track.filePath);
             if (fs.existsSync(trackPath)) {
               files.push({
                 path: trackPath,
@@ -144,7 +288,13 @@ const exportProject = async (req, res) => {
 
     // Генеруємо ім'я вихідного файлу
     const outputFileName = `${project.name.replace(/\s+/g, '_')}_${Date.now()}.mp3`;
-    const outputPath = path.join(__dirname, '../uploads', req.user.userId, projectId, outputFileName);
+    const outputDir = path.join(__dirname, '../uploads', req.user.userId, projectId);
+    const outputPath = path.join(outputDir, outputFileName);
+
+    // Створюємо директорію якщо її нема
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
 
     // Складаємо команду ffmpeg для змішування
     let ffmpegCommand = ffmpeg();
@@ -164,10 +314,12 @@ const exportProject = async (req, res) => {
       .outputOptions('-q:a', '5') // якість MP3
       .output(outputPath)
       .on('end', () => {
-        console.log(`Експорт завершено: ${outputPath}`);
+        console.log(`✅ Експорт завершено: ${outputPath}`);
+        // Нормалізуємо шлях для браузера
+        const downloadUrl = getNormalizedPath('audio', 'download', req.user.userId, projectId, outputFileName);
         res.status(200).json({
           message: 'Експорт успішно завершено',
-          filePath: `/api/audio/download/${req.user.userId}/${projectId}/${outputFileName}`,
+          filePath: `/api/${downloadUrl}`,
         });
       })
       .on('error', (error) => {
@@ -204,9 +356,39 @@ const downloadExport = (req, res) => {
   }
 };
 
+const streamAudioFile = (req, res) => {
+  try {
+    const relativePath = ((req.params && req.params[0]) || req.originalUrl || '')
+      .replace(/^\/api\/files\//, '')
+      .replace(/^\/+/, '');
+    const [userId, projectId, kind, ...fileNameParts] = relativePath.split('/');
+    const fileName = fileNameParts.join('/');
+
+    if (!userId || !projectId || !kind || !fileName) {
+      return res.status(404).json({ error: 'Файл не знайдено' });
+    }
+
+    const filePath = resolveAudioFilePath(userId, projectId, kind, fileName);
+
+    if (!filePath) {
+      return res.status(404).json({ error: 'Файл не знайдено' });
+    }
+
+    const mimeType = getMimeTypeFromFile(filePath);
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'no-store');
+    return res.sendFile(filePath);
+  } catch (error) {
+    console.error('Помилка при стрімінгу аудіо:', error);
+    return res.status(500).json({ error: 'Помилка при відтворенні файлу' });
+  }
+};
+
 module.exports = {
   uploadInstrumental,
   uploadVocal,
   exportProject,
   downloadExport,
+  streamAudioFile,
 };
