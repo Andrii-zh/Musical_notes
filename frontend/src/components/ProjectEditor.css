@@ -1,0 +1,338 @@
+.project-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.editor-error-banner {
+  background: rgba(255, 59, 48, 0.1);
+  border-bottom: 1px solid rgba(255, 59, 48, 0.3);
+  padding: 12px 20px;
+  font-size: 13px;
+  color: #ff3b30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.editor-error-banner button {
+  background: none;
+  border: none;
+  color: #ff3b30;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px;
+}
+
+.editor-content {
+  flex: 1;
+  display: flex;
+  gap: 20px;
+  overflow: hidden;
+  padding: 20px;
+}
+
+.editor-tracks {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.vocal-tracks-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.section-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.add-track-btn {
+  background: #0a84ff;
+  border: none;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  font-size: 18px;
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.add-track-btn:hover:not(:disabled) {
+  background: #0077e6;
+  transform: scale(1.05);
+}
+
+.add-track-btn:disabled {
+  background: #3a3a3c;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.vocal-tracks-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lyrics-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.lyrics-section h2 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.lyrics-textarea {
+  flex: 1;
+  background: #1c1c1e;
+  border: 1px solid #3a3a3c;
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 14px;
+  color: #ffffff;
+  font-family: 'SF Mono', 'Menlo', monospace, inherit;
+  resize: none;
+  transition: all 0.2s ease;
+}
+
+.lyrics-textarea:focus {
+  outline: none;
+  border-color: #0a84ff;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.15);
+}
+
+.lyrics-textarea::placeholder {
+  color: #8e8e93;
+}
+
+.editor-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #3a3a3c;
+  display: flex;
+  gap: 12px;
+}
+
+.action-btn {
+  flex: 1;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.save-btn {
+  background: #0a84ff;
+  color: #ffffff;
+}
+
+.save-btn:hover {
+  background: #0077e6;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(10, 132, 255, 0.3);
+}
+
+.export-btn {
+  background: #30b0c0;
+  color: #ffffff;
+}
+
+.export-btn:hover {
+  background: #28a0b0;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(48, 176, 192, 0.3);
+}
+
+.editor-loading,
+.editor-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #8e8e93;
+  font-size: 16px;
+}
+
+/* Модальне вікно */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: #1c1c1e;
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 380px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.modal h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.modal input {
+  width: 100%;
+  background: #2c2c2e;
+  border: 1px solid #3a3a3c;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #ffffff;
+  font-family: inherit;
+  box-sizing: border-box;
+  margin-bottom: 16px;
+  transition: all 0.2s ease;
+}
+
+.modal input:focus {
+  outline: none;
+  border-color: #0a84ff;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.15);
+}
+
+.modal input::placeholder {
+  color: #8e8e93;
+}
+
+.export-checklist {
+  background: #2c2c2e;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.export-checklist label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: #ebebf5;
+  font-size: 13px;
+}
+
+.export-checklist input {
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.modal-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  background: #3a3a3c;
+  color: #ebebf5;
+}
+
+.modal-btn:hover:not(:disabled) {
+  background: #4a4a4c;
+}
+
+.modal-btn.primary {
+  background: #0a84ff;
+  color: #ffffff;
+}
+
+.modal-btn.primary:hover:not(:disabled) {
+  background: #0077e6;
+}
+
+.modal-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Scrollbar */
+.editor-tracks::-webkit-scrollbar {
+  width: 8px;
+}
+
+.editor-tracks::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.editor-tracks::-webkit-scrollbar-thumb {
+  background: #3a3a3c;
+  border-radius: 4px;
+}
+
+.editor-tracks::-webkit-scrollbar-thumb:hover {
+  background: #5a5a5c;
+}
+
+.export-checklist::-webkit-scrollbar {
+  width: 6px;
+}
+
+.export-checklist::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.export-checklist::-webkit-scrollbar-thumb {
+  background: #3a3a3c;
+  border-radius: 3px;
+}
+
+.export-checklist::-webkit-scrollbar-thumb:hover {
+  background: #5a5a5c;
+}
