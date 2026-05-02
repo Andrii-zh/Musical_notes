@@ -44,7 +44,7 @@ const createProject = async (req, res) => {
     const { name } = req.body;
 
     if (!name) {
-      return res.status(400).json({ error: 'Назва проекту обов'язкова' });
+      return res.status(400).json({ error: "Назва проекту обов'язкова" });
     }
 
     const project = new Project({

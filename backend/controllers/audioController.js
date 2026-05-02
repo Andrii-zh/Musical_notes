@@ -2,6 +2,10 @@ const Project = require('../models/Project');
 const fs = require('fs');
 const path = require('path');
 const ffmpeg = require('fluent-ffmpeg');
+const ffmpegStatic = require('ffmpeg-static');
+
+// Налаштовуємо шлях до ffmpeg
+ffmpeg.setFfmpegPath(ffmpegStatic);
 
 // Завантажити інструментальну доріжку
 const uploadInstrumental = async (req, res) => {
