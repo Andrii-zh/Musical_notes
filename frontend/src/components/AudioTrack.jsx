@@ -20,6 +20,8 @@ export default function AudioTrack({
   const [isPlaying, setIsPlaying] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [error, setError] = useState('');
+  const [isCountingDown, setIsCountingDown] = useState(false);
+  const [countdownValue, setCountdownValue] = useState(null);
 
   const mediaRecorderRef = useRef(null);
   const audioContextRef = useRef(null);
@@ -30,6 +32,7 @@ export default function AudioTrack({
   const canvasRef = useRef(null);
   const analyserRef = useRef(null);
   const animationIdRef = useRef(null);
+  const countdownTimerRef = useRef(null);
 
   const getOrCreateAudioElement = useCallback(() => {
     if (!audioRef.current) {
@@ -51,7 +54,38 @@ export default function AudioTrack({
     return audioRef.current;
   }, [onAudioReady]);
 
-  const startRecording = async () => {
+  const startCountdown = async () => {
+    try {
+      setError('');
+      
+      // Запускаємо звук зворотнього відліку
+      const countdownAudio = new Audio('/1234.wav');
+      countdownAudio.play().catch(err => console.error('Помилка при запуску зворотнього відліку:', err));
+      
+      // Показуємо UI зворотнього відліку
+      setIsCountingDown(true);
+      const countdownSequence = [4, 3, 2, 1];
+      const interval = 600; // 2400 мс / 4 цифри = 600 мс на цифру
+      
+      countdownSequence.forEach((num, index) => {
+        countdownTimerRef.current = setTimeout(() => {
+          setCountdownValue(num);
+        }, index * interval);
+      });
+      
+      // Після завершення зворотнього відліку - запустити запис
+      countdownTimerRef.current = setTimeout(() => {
+        setIsCountingDown(false);
+        setCountdownValue(null);
+        performActualRecording();
+      }, 2400);
+    } catch (err) {
+      setError('Помилка при запуску зворотнього відліку: ' + err.message);
+      setIsCountingDown(false);
+    }
+  };
+
+  const performActualRecording = async () => {
     try {
       setError('');
       const constraints = {
@@ -130,6 +164,8 @@ export default function AudioTrack({
       setError('Помилка доступу до мікрофону: ' + err.message);
     }
   };
+
+  const startRecording = startCountdown;
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
@@ -443,7 +479,11 @@ export default function AudioTrack({
 
       <div className="track-controls">
         <div className="recording-controls">
-          {!isRecording ? (
+          {isCountingDown ? (
+            <div className="countdown-display">
+              {countdownValue}
+            </div>
+          ) : !isRecording ? (
             <button
               className="record-btn"
               onClick={startRecording}
