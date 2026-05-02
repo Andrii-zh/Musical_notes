@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
+import { AudioExporter } from '../utils/audioExporter';
 import './ProjectEditor.css';
 import AudioTrack from './AudioTrack';
+import { getAudioUrl } from '../utils/audioUtils';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -118,14 +120,98 @@ export default function ProjectEditor({ projectId, onUpdate }) {
     }
   };
 
+  const sanitizeExportName = (name) => {
+    const safe = String(name || 'project')
+      .split('')
+      .map((char) => (char.charCodeAt(0) < 32 ? '_' : char))
+      .join('')
+      .replace(/[<>:"/\\|?*]/g, '_')
+      .replace(/\s+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '');
+
+    return safe || 'project';
+  };
+
+  const downloadServerExport = async (downloadPath, token) => {
+    if (!downloadPath) {
+      throw new Error('Сервер не повернув шлях до експортованого файлу');
+    }
+
+    const fullUrl = downloadPath.startsWith('http')
+      ? downloadPath
+      : `${API_URL}${downloadPath.startsWith('/') ? downloadPath : `/${downloadPath}`}`;
+
+    const fileResponse = await fetch(fullUrl, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!fileResponse.ok) {
+      throw new Error('Сервер не надав файл для завантаження');
+    }
+
+    const blob = await fileResponse.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = `${sanitizeExportName(project.name)}.mp3`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(objectUrl);
+  };
+
+  const exportWithFallback = async () => {
+    const sources = [];
+
+    if (selectedTracksForExport.includes(-1) && project.instrumentalPath) {
+      const url = getAudioUrl(project.instrumentalPath);
+      if (url) {
+        sources.push({ url, volume: project.instrumentalVolume ?? 1 });
+      }
+    }
+
+    selectedTracksForExport
+      .filter((idx) => idx >= 0 && idx < project.vocalTracks.length)
+      .forEach((idx) => {
+        const track = project.vocalTracks[idx];
+        if (track?.filePath) {
+          const url = getAudioUrl(track.filePath);
+          if (url) {
+            sources.push({ url, volume: track.volume ?? 1 });
+          }
+        }
+      });
+
+    if (sources.length === 0) {
+      throw new Error('Немає доступних доріжок для експорту');
+    }
+
+    const exporter = new AudioExporter(44100);
+
+    try {
+      const buffers = await exporter.fetchMultipleAudio(sources.map((item) => item.url));
+      const gainedBuffers = buffers.map((buffer, i) => exporter.applyGain(buffer, sources[i].volume));
+      const merged = exporter.mergeAudio(gainedBuffers);
+      const output = exporter.export(merged, 'audio/wav');
+      exporter.download(output.blob, sanitizeExportName(project.name));
+    } finally {
+      exporter.close();
+    }
+  };
+
   const handleExportProject = async () => {
     if (selectedTracksForExport.length === 0) {
       setError('Виберіть хоча б одну доріжку для експорту');
       return;
     }
 
+    setSaving(true);
+    setError('');
+
     try {
-      setSaving(true);
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_URL}/audio/export/${projectId}`, {
         method: 'POST',
@@ -138,22 +224,22 @@ export default function ProjectEditor({ projectId, onUpdate }) {
         }),
       });
 
-      if (!response.ok) throw new Error('Не вдалося експортувати проект');
+      if (response.ok) {
+        const data = await response.json();
+        await downloadServerExport(data.filePath, token);
+        setShowExportDialog(false);
+        return;
+      }
 
-      const data = await response.json();
-
-      // Завантажуємо файл
-      const downloadUrl = `${API_URL}${data.filePath}`;
-      const a = document.createElement('a');
-      a.href = downloadUrl;
-      a.download = `${project.name}.mp3`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-
+      await exportWithFallback();
       setShowExportDialog(false);
-    } catch (err) {
-      setError(err.message);
+    } catch {
+      try {
+        await exportWithFallback();
+        setShowExportDialog(false);
+      } catch (fallbackErr) {
+        setError(fallbackErr.message || 'Не вдалося експортувати проект');
+      }
     } finally {
       setSaving(false);
     }
