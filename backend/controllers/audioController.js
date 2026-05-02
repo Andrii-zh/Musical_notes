@@ -246,6 +246,8 @@ const exportProject = async (req, res) => {
   try {
     const { projectId } = req.params;
     const { trackIndices } = req.body;
+    const selectedIndices = Array.isArray(trackIndices) ? [...new Set(trackIndices)] : [];
+    const includeInstrumental = selectedIndices.includes(-1);
 
     const project = await Project.findById(projectId);
 
@@ -261,8 +263,8 @@ const exportProject = async (req, res) => {
     // Перевіряємо наявність файлів
     const files = [];
 
-    // Додаємо інструментальну доріжку якщо вона є
-    if (project.instrumentalPath) {
+    // Додаємо інструментальну доріжку тільки якщо її явно обрано
+    if (includeInstrumental && project.instrumentalPath) {
       const instrumentalPath = toUploadDiskPath(project.instrumentalPath);
       if (fs.existsSync(instrumentalPath)) {
         files.push({
@@ -274,8 +276,8 @@ const exportProject = async (req, res) => {
     }
 
     // Додаємо вокальні доріжки
-    if (trackIndices && Array.isArray(trackIndices)) {
-      for (const trackIdx of trackIndices) {
+    if (selectedIndices.length > 0) {
+      for (const trackIdx of selectedIndices) {
         if (trackIdx >= 0 && trackIdx < project.vocalTracks.length) {
           const track = project.vocalTracks[trackIdx];
           if (track.filePath) {
@@ -308,30 +310,24 @@ const exportProject = async (req, res) => {
 
     // Складаємо команду ffmpeg для змішування
     let ffmpegCommand = ffmpeg();
-
     files.forEach((file) => {
       ffmpegCommand = ffmpegCommand.input(file.path);
     });
 
-    // Фільтр для змішування аудіо з врахуванням гучностей
-    const volumeFilters = files.map((file, index) => {
-      const volume = Number.isFinite(file.volume) ? file.volume : 1;
-      return `[${index}:a]volume=${volume}[a${index}]`;
-    });
-    const mixedInputs = files.map((_, index) => `[a${index}]`).join('');
-    const filterComplex = [
-      ...volumeFilters,
-      `${mixedInputs}amix=inputs=${files.length}:duration=longest:normalize=0[aout]`,
-    ];
+    let stderrLog = '';
+    let responseSent = false;
 
     ffmpegCommand
-      .complexFilter(filterComplex)
-      .outputOptions('-map', '[aout]')
-      .outputOptions('-q:a', '5') // якість MP3
-      .output(outputPath)
+      .on('start', (commandLine) => {
+        console.log('🎛 ffmpeg export command:', commandLine);
+      })
+      .on('stderr', (line) => {
+        stderrLog += `${line}\n`;
+      })
       .on('end', () => {
+        if (responseSent) return;
+        responseSent = true;
         console.log(`✅ Експорт завершено: ${outputPath}`);
-        // Нормалізуємо шлях для браузера
         const downloadUrl = getNormalizedPath('audio', 'download', req.user.userId, projectId, outputFileName);
         res.status(200).json({
           message: 'Експорт успішно завершено',
@@ -339,10 +335,49 @@ const exportProject = async (req, res) => {
         });
       })
       .on('error', (error) => {
+        if (responseSent) return;
+        responseSent = true;
         console.error('Помилка при експорті:', error);
-        res.status(500).json({ error: 'Помилка при експорті' });
-      })
-      .run();
+        if (stderrLog) {
+          const tail = stderrLog.split('\n').slice(-20).join('\n');
+          console.error('ffmpeg stderr tail:\n', tail);
+        }
+
+        const devDetails = process.env.NODE_ENV !== 'production'
+          ? ` ${String(error.message || '').slice(0, 240)}`
+          : '';
+        res.status(500).json({ error: `Помилка при експорті.${devDetails}` });
+      });
+
+    if (files.length === 1) {
+      const singleVolume = Number.isFinite(files[0].volume) ? files[0].volume : 1;
+      ffmpegCommand
+        .audioFilters(`aformat=sample_rates=44100:channel_layouts=stereo,volume=${singleVolume}`)
+        .audioCodec('libmp3lame')
+        .outputOptions('-q:a', '5')
+        .format('mp3')
+        .output(outputPath)
+        .run();
+    } else {
+      const normalizeFilters = files.map((file, index) => {
+        const volume = Number.isFinite(file.volume) ? file.volume : 1;
+        return `[${index}:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=${volume}[a${index}]`;
+      });
+      const mixInputs = files.map((_, index) => `[a${index}]`).join('');
+      const filterComplex = [
+        ...normalizeFilters,
+        `${mixInputs}amix=inputs=${files.length}:duration=longest:normalize=0:dropout_transition=0[aout]`,
+      ];
+
+      ffmpegCommand
+        .complexFilter(filterComplex)
+        .outputOptions('-map', '[aout]')
+        .audioCodec('libmp3lame')
+        .outputOptions('-q:a', '5')
+        .format('mp3')
+        .output(outputPath)
+        .run();
+    }
   } catch (error) {
     console.error('Помилка при експорті проекту:', error);
     res.status(500).json({ error: 'Помилка при експорті' });

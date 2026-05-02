@@ -198,6 +198,48 @@ export default function ProjectEditor({ projectId, onUpdate }) {
     }
   };
 
+  const handleRemoveTrack = async (trackIndexToRemove) => {
+    if (!project || project.vocalTracks.length <= 1) {
+      setError('Має бути хоча б одна вокальна доріжка');
+      return;
+    }
+
+    const newTracks = project.vocalTracks
+      .filter((_, idx) => idx !== trackIndexToRemove)
+      .map((track, newIndex) => ({
+        ...track,
+        trackIndex: newIndex,
+      }));
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/projects/${projectId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          vocalTracks: newTracks,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Не вдалося видалити доріжку');
+
+      const data = await response.json();
+      setProject(data.project);
+      onUpdate(data.project);
+
+      vocalAudioRefs.current = vocalAudioRefs.current.filter((_, idx) => idx !== trackIndexToRemove);
+      setSelectedTracksForExport((prev) => prev
+        .filter((idx) => idx === -1 || idx !== trackIndexToRemove)
+        .map((idx) => (idx > trackIndexToRemove ? idx - 1 : idx))
+      );
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const handleStartVocalRecording = () => {
     // Запускаємо інструментальну доріжку при запуску вокального запису
     if (instrumentalAudioRef.current && project?.instrumentalPath) {
@@ -339,62 +381,71 @@ export default function ProjectEditor({ projectId, onUpdate }) {
 
             <div className="vocal-tracks-container">
               {project.vocalTracks.map((track, index) => (
-                <AudioTrack
-                  key={index}
-                  title={`Доріжка ${index + 1}`}
-                  projectId={projectId}
-                  trackIndex={index}
-                  filePath={track.filePath}
-                  volume={track.volume}
-                  onStartRecording={handleStartVocalRecording}
-                  onAudioReady={(audio) => {
-                    vocalAudioRefs.current[index] = audio;
-                  }}
-                  onStopRecording={() => {
-                    if (instrumentalAudioRef.current) {
-                      try {
-                        instrumentalAudioRef.current.pause();
-                        instrumentalAudioRef.current.currentTime = 0;
-                      } catch {
-                        // ignore
-                      }
-                    }
-                  }}
-                  onVolumeChange={async (newVolume) => {
-                    const newTracks = [...project.vocalTracks];
-                    newTracks[index].volume = newVolume;
-                    try {
-                      const token = localStorage.getItem('token');
-                      const response = await fetch(
-                        `${API_URL}/projects/${projectId}`,
-                        {
-                          method: 'PUT',
-                          headers: {
-                            'Content-Type': 'application/json',
-                            Authorization: `Bearer ${token}`,
-                          },
-                          body: JSON.stringify({
-                            vocalTracks: newTracks,
-                          }),
+                <div key={index} className="vocal-track-item">
+                  <button
+                    className="remove-track-btn"
+                    onClick={() => handleRemoveTrack(index)}
+                    title={`Видалити доріжку ${index + 1}`}
+                    disabled={project.vocalTracks.length <= 1}
+                  >
+                    −
+                  </button>
+                  <AudioTrack
+                    title={`Доріжка ${index + 1}`}
+                    projectId={projectId}
+                    trackIndex={index}
+                    filePath={track.filePath}
+                    volume={track.volume}
+                    onStartRecording={handleStartVocalRecording}
+                    onAudioReady={(audio) => {
+                      vocalAudioRefs.current[index] = audio;
+                    }}
+                    onStopRecording={() => {
+                      if (instrumentalAudioRef.current) {
+                        try {
+                          instrumentalAudioRef.current.pause();
+                          instrumentalAudioRef.current.currentTime = 0;
+                        } catch {
+                          // ignore
                         }
-                      );
-                      if (response.ok) {
-                        const data = await response.json();
-                        setProject(data.project);
-                        onUpdate(data.project);
                       }
-                    } catch (err) {
-                      setError(err.message);
-                    }
-                  }}
-                  onFileUpload={async (newFilePath) => {
-                    const newTracks = [...project.vocalTracks];
-                    newTracks[index].filePath = newFilePath;
-                    const newProject = { ...project, vocalTracks: newTracks };
-                    setProject(newProject);
-                    onUpdate(newProject);
-                  }}
-                />
+                    }}
+                    onVolumeChange={async (newVolume) => {
+                      const newTracks = [...project.vocalTracks];
+                      newTracks[index].volume = newVolume;
+                      try {
+                        const token = localStorage.getItem('token');
+                        const response = await fetch(
+                          `${API_URL}/projects/${projectId}`,
+                          {
+                            method: 'PUT',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              Authorization: `Bearer ${token}`,
+                            },
+                            body: JSON.stringify({
+                              vocalTracks: newTracks,
+                            }),
+                          }
+                        );
+                        if (response.ok) {
+                          const data = await response.json();
+                          setProject(data.project);
+                          onUpdate(data.project);
+                        }
+                      } catch (err) {
+                        setError(err.message);
+                      }
+                    }}
+                    onFileUpload={async (newFilePath) => {
+                      const newTracks = [...project.vocalTracks];
+                      newTracks[index].filePath = newFilePath;
+                      const newProject = { ...project, vocalTracks: newTracks };
+                      setProject(newProject);
+                      onUpdate(newProject);
+                    }}
+                  />
+                </div>
               ))}
             </div>
           </div>
