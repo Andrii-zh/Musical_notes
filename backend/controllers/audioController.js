@@ -329,6 +329,12 @@ const exportProject = async (req, res) => {
         responseSent = true;
         console.log(`✅ Експорт завершено: ${outputPath}`);
         const downloadUrl = getNormalizedPath('audio', 'download', req.user.userId, projectId, outputFileName);
+        // Вказуємо заголовки, щоб браузер не кешував динамічно згенеровані файли експорту
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('Surrogate-Control', 'no-store');
+
         res.status(200).json({
           message: 'Експорт успішно завершено',
           filePath: `/${downloadUrl}`,
@@ -384,6 +390,81 @@ const exportProject = async (req, res) => {
   }
 };
 
+// Приймає з клієнта WAV/Blob і конвертує у MP3, повертає шлях для завантаження
+const convertMixToMp3 = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'Файл міксу не надіслано' });
+    }
+
+    const project = await Project.findById(projectId);
+    if (!project) {
+      // видаляємо тимчасовий файл
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+      return res.status(404).json({ error: 'Проект не знайдено' });
+    }
+
+    if (project.userId.toString() !== req.user.userId) {
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+      return res.status(403).json({ error: 'Доступ заборонено' });
+    }
+
+    const outputDir = path.join(__dirname, '../uploads', req.user.userId, projectId);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const outputFileName = `${sanitizeFileName(project.name)}_${Date.now()}.mp3`;
+    const outputPath = path.join(outputDir, outputFileName);
+
+    let stderrLog = '';
+    let responded = false;
+
+    ffmpeg(req.file.path)
+      .on('start', (cmd) => {
+        console.log('🎛 ffmpeg convert command:', cmd);
+      })
+      .on('stderr', (line) => {
+        stderrLog += `${line}\n`;
+      })
+      .on('end', () => {
+        try { fs.unlinkSync(req.file.path); } catch (e) {}
+        if (responded) return;
+        responded = true;
+
+        // Вказуємо no-cache заголовки
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('Surrogate-Control', 'no-store');
+
+        const downloadUrl = getNormalizedPath('audio', 'download', req.user.userId, projectId, outputFileName);
+        res.status(200).json({ message: 'Конвертація завершена', filePath: `/${downloadUrl}` });
+      })
+      .on('error', (err) => {
+        try { fs.unlinkSync(req.file.path); } catch (e) {}
+        if (responded) return;
+        responded = true;
+        console.error('Помилка при конвертації міксу:', err);
+        if (stderrLog) console.error('ffmpeg stderr tail:\n', stderrLog.split('\n').slice(-20).join('\n'));
+        res.status(500).json({ error: 'Помилка при конвертації міксу' });
+      })
+      .audioCodec('libmp3lame')
+      .audioChannels(2)
+      .audioFrequency(44100)
+      .audioBitrate('192k')
+      .format('mp3')
+      .outputOptions('-q:a', '5')
+      .save(outputPath);
+  } catch (error) {
+    console.error('Помилка в convertMixToMp3:', error);
+    try { if (req.file && req.file.path) fs.unlinkSync(req.file.path); } catch (e) {}
+    res.status(500).json({ error: 'Внутрішня помилка при обробці міксу' });
+  }
+};
+
 // Завантажити експортований файл
 const downloadExport = (req, res) => {
   try {
@@ -400,7 +481,16 @@ const downloadExport = (req, res) => {
       return res.status(404).json({ error: 'Файл не знайдено' });
     }
 
-    res.download(filePath, fileName);
+    // Встановлюємо явні заголовки, щоб уникнути кешування та вказати content-type
+    const mimeType = getMimeTypeFromFile(filePath) || 'application/octet-stream';
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
+
+    return res.sendFile(filePath);
   } catch (error) {
     console.error('Помилка при завантаженні файлу:', error);
     res.status(500).json({ error: 'Помилка при завантаженні файлу' });
@@ -440,6 +530,7 @@ module.exports = {
   uploadInstrumental,
   uploadVocal,
   exportProject,
+  convertMixToMp3,
   downloadExport,
   streamAudioFile,
 };

@@ -6,6 +6,7 @@ const {
   uploadInstrumental,
   uploadVocal,
   exportProject,
+  convertMixToMp3,
   downloadExport,
 } = require('../controllers/audioController');
 const authenticateToken = require('../middleware/auth');
@@ -70,6 +71,9 @@ router.post('/upload/vocal/:projectId/:trackIndex', upload.single('vocal'), uplo
 
 // Експортувати проект
 router.post('/export/:projectId', exportProject);
+
+// Завантажити мікс від клієнта для конвертації у MP3
+router.post('/upload/mix/:projectId', upload.single('mix'), convertMixToMp3);
 
 // Завантажити експортований файл
 router.get('/download/:userId/:projectId/:fileName', downloadExport);

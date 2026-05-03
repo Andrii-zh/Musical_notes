@@ -14,22 +14,49 @@
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  padding-top: 12px;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  transform: translateX(0);
+  transition: transform 0.25s ease;
+  z-index: 100;
 }
+
+.topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: rgba(12,12,12,0.85);
+  border-bottom: 1px solid #222;
+  z-index: 80; /* lower than sidebar so sidebar overlays topbar */
+}
+
+.topbar-left,
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-left { gap: 12px; }
+
+.topbar-actions { display:flex; gap:8px; align-items:center; }
 
 .sidebar-header {
   padding: 16px 20px;
   border-bottom: 1px solid #3a3a3c;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
-}
-
-.sidebar-header h1 {
-  font-size: 18px;
-  font-weight: 700;
-  margin: 0;
-  flex: 1;
 }
 
 .logout-btn {
@@ -63,6 +90,51 @@
   flex-direction: column;
   background: #0d0d0d;
   overflow: hidden;
+  margin-left: 0;
+  padding-top: 0;
+}
+
+/* When sidebar closed, expand editor area */
+.main-layout.sidebar-closed .sidebar {
+  transform: translateX(-100%);
+}
+
+.main-layout.sidebar-closed .editor-area {
+  margin-left: 0;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 16px;
+  border-top: 1px solid #2a2a2c;
+  display: flex;
+  justify-content: center;
+}
+
+.logout-btn {
+  width: 100%;
+  max-width: 220px;
+  background: #ff3b30;
+  color: #ffffff;
+  border: none;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+/* Backdrop to close sidebar on outside click */
+.backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.3);
+  z-index: 95;
+}
+
+.sidebar-header {
+  display: none;
 }
 
 .no-project {

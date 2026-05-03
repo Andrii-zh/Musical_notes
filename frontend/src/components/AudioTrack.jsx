@@ -10,6 +10,9 @@ export default function AudioTrack({
   trackIndex,
   filePath,
   volume,
+  timelineDuration,
+  pixelsPerSecond,
+  onDurationChange,
   onVolumeChange,
   onFileUpload,
   onStartRecording,
@@ -267,8 +270,26 @@ export default function AudioTrack({
 
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
+        const duration = audioBuffer.duration || 0;
+
+        // Визначаємо ширину canvas за тривалістю (пікселів на секунду)
+        const pps = Number.isFinite(pixelsPerSecond) ? pixelsPerSecond : 90;
+        const computedWidth = Math.max(300, Math.round(duration * pps));
+        // Встановлюємо реальну ширину полотна для малювання
+        canvas.width = computedWidth;
+        canvas.style.width = `${computedWidth}px`;
+
         const width = canvas.width;
         const height = canvas.height;
+
+        // Передаємо тривалість у ProjectEditor
+        if (typeof onDurationChange === 'function') {
+          try {
+            onDurationChange(trackIndex, duration);
+          } catch (e) {
+            // ignore
+          }
+        }
 
         // Очищуємо canvas
         ctx.fillStyle = '#0d0d0d';
@@ -465,113 +486,104 @@ export default function AudioTrack({
     <div className="audio-track">
       <div className="track-header">
         <h3>{title}</h3>
-        {filePath && <span className="track-indicator">📁</span>}
       </div>
 
       {error && <div className="track-error">{error}</div>}
 
-      <canvas
-        ref={canvasRef}
-        className="waveform-canvas"
-        width={300}
-        height={80}
-      />
+      <div className="track-content">
+        <div className="track-controls-left">
+          <div className="range-slider">
+            <input
+              className="input-range"
+              orient="vertical"
+              type="range"
+              step="0.01"
+              value={volume}
+              min="0"
+              max="1"
+              onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
+            />
+          </div>
 
-      <div className="track-controls">
-        <div className="recording-controls">
-          {isCountingDown ? (
-            <div className="countdown-display">
-              {countdownValue}
-            </div>
-          ) : !isRecording ? (
-            <button
-              className="record-btn"
-              onClick={startRecording}
-              title="Почати запис"
-            >
-              ● Запис
-            </button>
-          ) : (
-            <>
+          <div className="controls-buttons">
+            {!isRecording ? (
               <button
-                className="stop-btn"
+                className="control-btn record-btn"
+                onClick={startRecording}
+                disabled={isCountingDown}
+                title="Почати запис"
+              >
+                {isCountingDown ? countdownValue : '●'}
+              </button>
+            ) : (
+              <button
+                className="control-btn stop-btn"
                 onClick={stopRecording}
                 title="Зупинити запис"
               >
-                ⏹ {recordingTime}s
+                ⏹
               </button>
-            </>
-          )}
+            )}
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="audio/*"
-            onChange={handleFileChange}
-            style={{ display: 'none' }}
-          />
-          <button
-            className="upload-btn"
-            onClick={() => fileInputRef.current?.click()}
-            title="Завантажити файл"
-          >
-            📤 Файл
-          </button>
-        </div>
-
-        <div className="playback-controls">
-          {filePath ? (
-            <>
-              {!isPlaying ? (
-                <button
-                  className="play-btn"
-                  onClick={playAudio}
-                  title="Прослухати"
-                >
-                  ▶ Слухати
-                </button>
-              ) : (
-                <button
-                  className="pause-btn"
-                  onClick={stopPlaying}
-                  title="Паузувати"
-                >
-                  ⏸ Паузу
-                </button>
-              )}
-            </>
-          ) : (
-            <button className="play-btn disabled" disabled>
-              ▶ Слухати
-            </button>
-          )}
-
-          {filePath && (
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="audio/*"
+              onChange={handleFileChange}
+              style={{ display: 'none' }}
+            />
             <button
-              className="clear-btn"
-              onClick={clearTrack}
-              title="Очистити доріжку"
+              className="control-btn upload-btn"
+              onClick={() => fileInputRef.current?.click()}
+              title="Завантажити файл"
             >
-              ✕
+              📤
             </button>
-          )}
-        </div>
-      </div>
 
-      <div className="volume-control">
-        <label>Гучність</label>
-        <div className="volume-slider-container">
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
-            className="volume-slider"
-          />
-          <span className="volume-value">{Math.round(volume * 100)}%</span>
+            {filePath ? (
+              <>
+                {!isPlaying ? (
+                  <button
+                    className="control-btn play-btn"
+                    onClick={playAudio}
+                    title="Прослухати"
+                  >
+                    ▶
+                  </button>
+                ) : (
+                  <button
+                    className="control-btn pause-btn"
+                    onClick={stopPlaying}
+                    title="Паузувати"
+                  >
+                    ⏸
+                  </button>
+                )}
+              </>
+            ) : (
+              <button className="control-btn play-btn disabled" disabled>
+                ▶
+              </button>
+            )}
+
+            {filePath && (
+              <button
+                className="control-btn clear-btn"
+                onClick={clearTrack}
+                title="Очистити доріжку"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
+
+        <canvas
+          ref={canvasRef}
+          className="waveform-canvas"
+          width={300}
+          height={80}
+        />
       </div>
 
     </div>

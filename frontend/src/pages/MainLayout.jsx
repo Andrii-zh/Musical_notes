@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import './MainLayout.css';
 import ProjectList from '../components/ProjectList';
 import ProjectEditor from '../components/ProjectEditor';
+import { useRef } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -10,6 +11,8 @@ export default function MainLayout({ onLogout }) {
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const editorRef = useRef(null);
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -91,14 +94,11 @@ export default function MainLayout({ onLogout }) {
   };
 
   return (
-    <div className="main-layout">
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <h1>🎵 Musical Notes</h1>
-          <button className="logout-btn" onClick={onLogout} title="Вийти">
-            ✕
-          </button>
-        </div>
+    <div className={`main-layout ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
+      {sidebarOpen && <div className="backdrop" onClick={() => setSidebarOpen(false)} />}
+
+      <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
+        <div className="sidebar-header" />
 
         {error && <div className="error-banner">{error}</div>}
 
@@ -110,13 +110,21 @@ export default function MainLayout({ onLogout }) {
           onDeleteProject={handleDeleteProject}
           loading={loading}
         />
+
+        <div className="sidebar-footer">
+          <button className="logout-btn record-btn" onClick={onLogout} title="Вийти">
+            Вийти
+          </button>
+        </div>
       </aside>
 
       <main className="editor-area">
         {selectedProjectId && projects.length > 0 ? (
           <ProjectEditor
+            ref={editorRef}
             projectId={selectedProjectId}
             onUpdate={handleProjectUpdate}
+            onToggleSidebar={() => setSidebarOpen((s) => !s)}
           />
         ) : (
           <div className="no-project">
